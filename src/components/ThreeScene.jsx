@@ -26,6 +26,8 @@ const ThreeScene = () => {
     scale: { x: 1, y: 1, z: 1 }
   });
   const [extrusionHeight, setExtrusionHeight] = useState(2);
+  const [gridVisible, setGridVisible] = useState(true);
+  const [gridSize, setGridSize] = useState(200);
   
   // Refs to store current state values for event handlers
   const isSketchModeRef = useRef(false);
@@ -101,11 +103,53 @@ const ThreeScene = () => {
         controls.dampingFactor = 0.05;
         controlsRef.current = controls;
 
-        // Helpers
-        const gridHelper = new THREE.GridHelper(20, 20);
-        scene.add(gridHelper);
+        // Create Blender-style grid system
+        const createGridSystem = () => {
+          const gridGroup = new THREE.Group();
+          gridGroup.name = 'gridSystem';
+          
+          // Main grid (fine grid)
+          const mainGrid = new THREE.GridHelper(200, 200, 0x888888, 0x888888);
+          mainGrid.material.opacity = 0.3;
+          mainGrid.material.transparent = true;
+          mainGrid.name = 'mainGrid';
+          gridGroup.add(mainGrid);
+          
+          // Major grid lines (every 10 units)
+          const majorGrid = new THREE.GridHelper(200, 50, 0x666666, 0x666666);
+          majorGrid.material.opacity = 0.5;
+          majorGrid.material.transparent = true;
+          majorGrid.name = 'majorGrid';
+          gridGroup.add(majorGrid);
+          
+          // Center lines (X and Z axes)
+          const centerGrid = new THREE.GridHelper(200, 2, 0x000000, 0x000000);
+          centerGrid.material.opacity = 0.8;
+          centerGrid.material.transparent = true;
+          centerGrid.name = 'centerGrid';
+          gridGroup.add(centerGrid);
+          
+          // Add grid planes for better visibility
+          const gridPlaneGeometry = new THREE.PlaneGeometry(400, 400);
+          const gridPlaneMaterial = new THREE.MeshBasicMaterial({
+            color: 0xf0f0f0,
+            transparent: true,
+            opacity: 0.1,
+            side: THREE.DoubleSide
+          });
+          const gridPlane = new THREE.Mesh(gridPlaneGeometry, gridPlaneMaterial);
+          gridPlane.rotation.x = -Math.PI / 2;
+          gridPlane.name = 'gridPlane';
+          gridGroup.add(gridPlane);
+          
+          scene.add(gridGroup);
+        };
+        
+        createGridSystem();
 
-        const axesHelper = new THREE.AxesHelper(5);
+        // Enhanced axes helper
+        const axesHelper = new THREE.AxesHelper(10);
+        axesHelper.name = 'axesHelper';
         scene.add(axesHelper);
 
         // Lighting
@@ -245,10 +289,40 @@ const ThreeScene = () => {
           mountRef.current.addEventListener('mousemove', handleMouseMove);
         }
 
+        // Adaptive grid system
+        const updateGridVisibility = () => {
+          const gridSystem = scene.getObjectByName('gridSystem');
+          if (!gridSystem) return;
+          
+          const cameraDistance = camera.position.length();
+          const mainGrid = gridSystem.getObjectByName('mainGrid');
+          const majorGrid = gridSystem.getObjectByName('majorGrid');
+          const centerGrid = gridSystem.getObjectByName('centerGrid');
+          
+          // Adjust grid visibility based on camera distance
+          if (cameraDistance < 20) {
+            // Close view - show fine grid
+            if (mainGrid) mainGrid.visible = true;
+            if (majorGrid) majorGrid.visible = true;
+            if (centerGrid) centerGrid.visible = true;
+          } else if (cameraDistance < 50) {
+            // Medium view - show major grid
+            if (mainGrid) mainGrid.visible = false;
+            if (majorGrid) majorGrid.visible = true;
+            if (centerGrid) centerGrid.visible = true;
+          } else {
+            // Far view - show only center lines
+            if (mainGrid) mainGrid.visible = false;
+            if (majorGrid) majorGrid.visible = false;
+            if (centerGrid) centerGrid.visible = true;
+          }
+        };
+
         // Animation loop
         const animate = () => {
           requestAnimationFrame(animate);
           controls.update();
+          updateGridVisibility();
           renderer.render(scene, camera);
         };
         animate();
@@ -873,6 +947,67 @@ const ThreeScene = () => {
     reader.readAsText(file);
   };
 
+  const toggleGrid = () => {
+    if (sceneRef.current) {
+      const gridSystem = sceneRef.current.getObjectByName('gridSystem');
+      if (gridSystem) {
+        gridSystem.visible = !gridVisible;
+        setGridVisible(!gridVisible);
+      }
+    }
+  };
+
+  const updateGridSize = (newSize) => {
+    if (sceneRef.current) {
+      const gridSystem = sceneRef.current.getObjectByName('gridSystem');
+      if (gridSystem) {
+        // Remove old grid
+        sceneRef.current.remove(gridSystem);
+        
+        // Create new grid with new size
+        const newGridGroup = new THREE.Group();
+        newGridGroup.name = 'gridSystem';
+        
+        // Main grid (fine grid)
+        const mainGrid = new THREE.GridHelper(newSize, newSize, 0x888888, 0x888888);
+        mainGrid.material.opacity = 0.3;
+        mainGrid.material.transparent = true;
+        mainGrid.name = 'mainGrid';
+        newGridGroup.add(mainGrid);
+        
+        // Major grid lines (every 10 units)
+        const majorGrid = new THREE.GridHelper(newSize, newSize / 10, 0x666666, 0x666666);
+        majorGrid.material.opacity = 0.5;
+        majorGrid.material.transparent = true;
+        majorGrid.name = 'majorGrid';
+        newGridGroup.add(majorGrid);
+        
+        // Center lines (X and Z axes)
+        const centerGrid = new THREE.GridHelper(newSize, 2, 0x000000, 0x000000);
+        centerGrid.material.opacity = 0.8;
+        centerGrid.material.transparent = true;
+        centerGrid.name = 'centerGrid';
+        newGridGroup.add(centerGrid);
+        
+        // Add grid planes for better visibility
+        const gridPlaneGeometry = new THREE.PlaneGeometry(newSize * 2, newSize * 2);
+        const gridPlaneMaterial = new THREE.MeshBasicMaterial({
+          color: 0xf0f0f0,
+          transparent: true,
+          opacity: 0.1,
+          side: THREE.DoubleSide
+        });
+        const gridPlane = new THREE.Mesh(gridPlaneGeometry, gridPlaneMaterial);
+        gridPlane.rotation.x = -Math.PI / 2;
+        gridPlane.name = 'gridPlane';
+        newGridGroup.add(gridPlane);
+        
+        sceneRef.current.add(newGridGroup);
+        setGridSize(newSize);
+      }
+    }
+  };
+
   return (
     <div className="three-scene-container">
       <div className="controls-panel">
@@ -1163,6 +1298,36 @@ const ThreeScene = () => {
           >
             Redo
           </button>
+        </div>
+
+        <div className="grid-controls">
+          <h4>Grid Settings</h4>
+          <button 
+            onClick={toggleGrid}
+            className={gridVisible ? 'active' : ''}
+          >
+            {gridVisible ? 'Hide Grid' : 'Show Grid'}
+          </button>
+          
+          <div className="grid-size-control">
+            <label>Grid Size: 
+              <input 
+                type="range" 
+                min="50" 
+                max="500" 
+                step="25"
+                value={gridSize}
+                onChange={(e) => updateGridSize(parseInt(e.target.value))}
+              />
+              <input 
+                type="number" 
+                step="25"
+                value={gridSize}
+                onChange={(e) => updateGridSize(parseInt(e.target.value))}
+                style={{width: '60px', marginLeft: '5px'}}
+              />
+            </label>
+          </div>
         </div>
 
         <div className="scene-controls">
