@@ -20,6 +20,11 @@ const ThreeScene = () => {
   const [polygonPoints, setPolygonPoints] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [objectProperties, setObjectProperties] = useState({
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 }
+  });
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -232,6 +237,25 @@ const ThreeScene = () => {
     }
     object.material.emissive.setHex(0x444444);
     setSelectedObject(object);
+    
+    // Update object properties state for dynamic UI updates
+    setObjectProperties({
+      position: {
+        x: object.position.x,
+        y: object.position.y,
+        z: object.position.z
+      },
+      rotation: {
+        x: object.rotation.x * 180 / Math.PI,
+        y: object.rotation.y * 180 / Math.PI,
+        z: object.rotation.z * 180 / Math.PI
+      },
+      scale: {
+        x: object.scale.x,
+        y: object.scale.y,
+        z: object.scale.z
+      }
+    });
   };
 
   const saveToHistory = () => {
@@ -593,24 +617,52 @@ const ThreeScene = () => {
     switch (property) {
       case 'positionX':
         selectedObject.position.x = numValue;
+        setObjectProperties(prev => ({
+          ...prev,
+          position: { ...prev.position, x: numValue }
+        }));
         break;
       case 'positionY':
         selectedObject.position.y = numValue;
+        setObjectProperties(prev => ({
+          ...prev,
+          position: { ...prev.position, y: numValue }
+        }));
         break;
       case 'positionZ':
         selectedObject.position.z = numValue;
+        setObjectProperties(prev => ({
+          ...prev,
+          position: { ...prev.position, z: numValue }
+        }));
         break;
       case 'rotationX':
         selectedObject.rotation.x = numValue * Math.PI / 180;
+        setObjectProperties(prev => ({
+          ...prev,
+          rotation: { ...prev.rotation, x: numValue }
+        }));
         break;
       case 'rotationY':
         selectedObject.rotation.y = numValue * Math.PI / 180;
+        setObjectProperties(prev => ({
+          ...prev,
+          rotation: { ...prev.rotation, y: numValue }
+        }));
         break;
       case 'rotationZ':
         selectedObject.rotation.z = numValue * Math.PI / 180;
+        setObjectProperties(prev => ({
+          ...prev,
+          rotation: { ...prev.rotation, z: numValue }
+        }));
         break;
       case 'scale':
         selectedObject.scale.set(numValue, numValue, numValue);
+        setObjectProperties(prev => ({
+          ...prev,
+          scale: { x: numValue, y: numValue, z: numValue }
+        }));
         break;
     }
     
@@ -772,16 +824,16 @@ const ThreeScene = () => {
               <label>X: 
                 <input 
                   type="range" 
-                  min="-20" 
-                  max="20" 
-                  step="0.5"
-                  value={selectedObject.position.x}
+                  min="-50" 
+                  max="50" 
+                  step="0.1"
+                  value={objectProperties.position.x}
                   onChange={(e) => transformObject('positionX', e.target.value)}
                 />
                 <input 
                   type="number" 
-                  step="0.5"
-                  value={selectedObject.position.x.toFixed(2)}
+                  step="0.1"
+                  value={objectProperties.position.x.toFixed(2)}
                   onChange={(e) => transformObject('positionX', e.target.value)}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
@@ -789,16 +841,16 @@ const ThreeScene = () => {
               <label>Y: 
                 <input 
                   type="range" 
-                  min="-20" 
-                  max="20" 
-                  step="0.5"
-                  value={selectedObject.position.y}
+                  min="-50" 
+                  max="50" 
+                  step="0.1"
+                  value={objectProperties.position.y}
                   onChange={(e) => transformObject('positionY', e.target.value)}
                 />
                 <input 
                   type="number" 
-                  step="0.5"
-                  value={selectedObject.position.y.toFixed(2)}
+                  step="0.1"
+                  value={objectProperties.position.y.toFixed(2)}
                   onChange={(e) => transformObject('positionY', e.target.value)}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
@@ -806,16 +858,16 @@ const ThreeScene = () => {
               <label>Z: 
                 <input 
                   type="range" 
-                  min="-20" 
-                  max="20" 
-                  step="0.5"
-                  value={selectedObject.position.z}
+                  min="-50" 
+                  max="50" 
+                  step="0.1"
+                  value={objectProperties.position.z}
                   onChange={(e) => transformObject('positionZ', e.target.value)}
                 />
                 <input 
                   type="number" 
-                  step="0.5"
-                  value={selectedObject.position.z.toFixed(2)}
+                  step="0.1"
+                  value={objectProperties.position.z.toFixed(2)}
                   onChange={(e) => transformObject('positionZ', e.target.value)}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
@@ -827,16 +879,16 @@ const ThreeScene = () => {
               <label>X: 
                 <input 
                   type="range" 
-                  min="-180" 
-                  max="180" 
-                  step="5"
-                  value={selectedObject.rotation.x * 180 / Math.PI}
+                  min="-360" 
+                  max="360" 
+                  step="1"
+                  value={objectProperties.rotation.x}
                   onChange={(e) => transformObject('rotationX', e.target.value)}
                 />
                 <input 
                   type="number" 
-                  step="5"
-                  value={(selectedObject.rotation.x * 180 / Math.PI).toFixed(2)}
+                  step="1"
+                  value={objectProperties.rotation.x.toFixed(2)}
                   onChange={(e) => transformObject('rotationX', e.target.value)}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
@@ -844,16 +896,16 @@ const ThreeScene = () => {
               <label>Y: 
                 <input 
                   type="range" 
-                  min="-180" 
-                  max="180" 
-                  step="5"
-                  value={selectedObject.rotation.y * 180 / Math.PI}
+                  min="-360" 
+                  max="360" 
+                  step="1"
+                  value={objectProperties.rotation.y}
                   onChange={(e) => transformObject('rotationY', e.target.value)}
                 />
                 <input 
                   type="number" 
-                  step="5"
-                  value={(selectedObject.rotation.y * 180 / Math.PI).toFixed(2)}
+                  step="1"
+                  value={objectProperties.rotation.y.toFixed(2)}
                   onChange={(e) => transformObject('rotationY', e.target.value)}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
@@ -861,16 +913,16 @@ const ThreeScene = () => {
               <label>Z: 
                 <input 
                   type="range" 
-                  min="-180" 
-                  max="180" 
-                  step="5"
-                  value={selectedObject.rotation.z * 180 / Math.PI}
+                  min="-360" 
+                  max="360" 
+                  step="1"
+                  value={objectProperties.rotation.z}
                   onChange={(e) => transformObject('rotationZ', e.target.value)}
                 />
                 <input 
                   type="number" 
-                  step="5"
-                  value={(selectedObject.rotation.z * 180 / Math.PI).toFixed(2)}
+                  step="1"
+                  value={objectProperties.rotation.z.toFixed(2)}
                   onChange={(e) => transformObject('rotationZ', e.target.value)}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
@@ -882,16 +934,16 @@ const ThreeScene = () => {
               <label>Scale: 
                 <input 
                   type="range" 
-                  min="0.1" 
-                  max="5" 
-                  step="0.1"
-                  value={selectedObject.scale.x}
+                  min="0.01" 
+                  max="20" 
+                  step="0.01"
+                  value={objectProperties.scale.x}
                   onChange={(e) => transformObject('scale', e.target.value)}
                 />
                 <input 
                   type="number" 
-                  step="0.1"
-                  value={selectedObject.scale.x.toFixed(2)}
+                  step="0.01"
+                  value={objectProperties.scale.x.toFixed(2)}
                   onChange={(e) => transformObject('scale', e.target.value)}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
@@ -937,27 +989,27 @@ const ThreeScene = () => {
             <div className="dimension-info">
               {selectedObject.userData.type === 'box' && (
                 <div>
-                  <div>Width: {(selectedObject.scale.x * 2).toFixed(2)}</div>
-                  <div>Height: {(selectedObject.scale.y * 2).toFixed(2)}</div>
-                  <div>Depth: {(selectedObject.scale.z * 2).toFixed(2)}</div>
+                  <div>Width: {(objectProperties.scale.x * 2).toFixed(2)}</div>
+                  <div>Height: {(objectProperties.scale.y * 2).toFixed(2)}</div>
+                  <div>Depth: {(objectProperties.scale.z * 2).toFixed(2)}</div>
                 </div>
               )}
               {selectedObject.userData.type === 'sphere' && (
                 <div>
-                  <div>Radius: {selectedObject.scale.x.toFixed(2)}</div>
-                  <div>Diameter: {(selectedObject.scale.x * 2).toFixed(2)}</div>
+                  <div>Radius: {objectProperties.scale.x.toFixed(2)}</div>
+                  <div>Diameter: {(objectProperties.scale.x * 2).toFixed(2)}</div>
                 </div>
               )}
               {selectedObject.userData.type === 'cylinder' && (
                 <div>
-                  <div>Radius: {selectedObject.scale.x.toFixed(2)}</div>
-                  <div>Height: {(selectedObject.scale.y * 2).toFixed(2)}</div>
+                  <div>Radius: {objectProperties.scale.x.toFixed(2)}</div>
+                  <div>Height: {(objectProperties.scale.y * 2).toFixed(2)}</div>
                 </div>
               )}
               {selectedObject.userData.type === 'extruded' && (
                 <div>
                   <div>Extruded Shape</div>
-                  <div>Height: {(selectedObject.scale.y * 2).toFixed(2)}</div>
+                  <div>Height: {(objectProperties.scale.y * 2).toFixed(2)}</div>
                 </div>
               )}
             </div>
