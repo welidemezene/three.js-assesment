@@ -25,6 +25,35 @@ const ThreeScene = () => {
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 }
   });
+  const [extrusionHeight, setExtrusionHeight] = useState(2);
+  
+  // Refs to store current state values for event handlers
+  const isSketchModeRef = useRef(false);
+  const sketchToolRef = useRef('rectangle');
+  const isDrawingRef = useRef(false);
+  const currentSketchRef = useRef(null);
+  const polygonPointsRef = useRef([]);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isSketchModeRef.current = isSketchMode;
+  }, [isSketchMode]);
+
+  useEffect(() => {
+    sketchToolRef.current = sketchTool;
+  }, [sketchTool]);
+
+  useEffect(() => {
+    isDrawingRef.current = isDrawing;
+  }, [isDrawing]);
+
+  useEffect(() => {
+    currentSketchRef.current = currentSketch;
+  }, [currentSketch]);
+
+  useEffect(() => {
+    polygonPointsRef.current = polygonPoints;
+  }, [polygonPoints]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -99,7 +128,7 @@ const ThreeScene = () => {
 
         // Event listeners
         const handleMouseClick = (event) => {
-          if (isSketchMode) {
+          if (isSketchModeRef.current) {
             handleSketchClick(event);
             return;
           }
@@ -136,16 +165,61 @@ const ThreeScene = () => {
             intersectPoint.z = Math.round(intersectPoint.z);
             intersectPoint.y = 0;
 
-            if (!isDrawing) {
+            if (!isDrawingRef.current) {
               startSketch(intersectPoint);
-            } else {
-              continueSketch(intersectPoint);
+            } else if (sketchToolRef.current === 'polygon') {
+              startSketch(intersectPoint);
             }
           }
         };
 
+        const handleMouseDown = (event) => {
+          if (!isSketchModeRef.current || sketchToolRef.current === 'polygon') return;
+          
+          console.log('Mouse down in sketch mode, tool:', sketchToolRef.current);
+          const rect = renderer.domElement.getBoundingClientRect();
+          mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+          raycaster.setFromCamera(mouse, camera);
+          const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          const intersectPoint = new THREE.Vector3();
+          raycaster.ray.intersectPlane(plane, intersectPoint);
+
+          if (intersectPoint) {
+            intersectPoint.x = Math.round(intersectPoint.x);
+            intersectPoint.z = Math.round(intersectPoint.z);
+            intersectPoint.y = 0;
+            console.log('Starting sketch at point:', intersectPoint);
+            startSketch(intersectPoint);
+          } else {
+            console.log('No intersection point found');
+          }
+        };
+
+        const handleMouseUp = (event) => {
+          if (!isSketchModeRef.current || sketchToolRef.current === 'polygon') return;
+          
+          console.log('Mouse up in sketch mode, currentSketch:', currentSketchRef.current);
+          const rect = renderer.domElement.getBoundingClientRect();
+          mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+          raycaster.setFromCamera(mouse, camera);
+          const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          const intersectPoint = new THREE.Vector3();
+          raycaster.ray.intersectPlane(plane, intersectPoint);
+
+          if (intersectPoint && currentSketchRef.current) {
+            intersectPoint.x = Math.round(intersectPoint.x);
+            intersectPoint.z = Math.round(intersectPoint.z);
+            intersectPoint.y = 0;
+            finishSketchWithPoint(intersectPoint);
+          }
+        };
+
         const handleMouseMove = (event) => {
-          if (!isSketchMode || !isDrawing) return;
+          if (!isSketchModeRef.current || !isDrawingRef.current) return;
 
           const rect = renderer.domElement.getBoundingClientRect();
           mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -164,8 +238,12 @@ const ThreeScene = () => {
           }
         };
 
-        mountRef.current.addEventListener('click', handleMouseClick);
-        mountRef.current.addEventListener('mousemove', handleMouseMove);
+        if (mountRef.current) {
+          mountRef.current.addEventListener('click', handleMouseClick);
+          mountRef.current.addEventListener('mousedown', handleMouseDown);
+          mountRef.current.addEventListener('mouseup', handleMouseUp);
+          mountRef.current.addEventListener('mousemove', handleMouseMove);
+        }
 
         // Animation loop
         const animate = () => {
@@ -177,6 +255,7 @@ const ThreeScene = () => {
 
         // Handle window resize
         const handleResize = () => {
+          if (!mountRef.current) return;
           const width = mountRef.current.clientWidth;
           const height = mountRef.current.clientHeight;
           camera.aspect = width / height;
@@ -188,10 +267,14 @@ const ThreeScene = () => {
         // Cleanup
         return () => {
           window.removeEventListener('resize', handleResize);
-          mountRef.current?.removeEventListener('click', handleMouseClick);
-          mountRef.current?.removeEventListener('mousemove', handleMouseMove);
-          if (mountRef.current && renderer.domElement) {
-            mountRef.current.removeChild(renderer.domElement);
+          if (mountRef.current) {
+            mountRef.current.removeEventListener('click', handleMouseClick);
+            mountRef.current.removeEventListener('mousedown', handleMouseDown);
+            mountRef.current.removeEventListener('mouseup', handleMouseUp);
+            mountRef.current.removeEventListener('mousemove', handleMouseMove);
+            if (renderer.domElement) {
+              mountRef.current.removeChild(renderer.domElement);
+            }
           }
           renderer.dispose();
         };
@@ -386,48 +469,66 @@ const ThreeScene = () => {
 
   const startSketch = (point) => {
     console.log('startSketch called with point:', point);
-    console.log('sketchTool:', sketchTool);
+    console.log('sketchTool:', sketchToolRef.current);
     
-    if (sketchTool === 'polygon') {
-      if (polygonPoints.length === 0) {
+    if (sketchToolRef.current === 'polygon') {
+      if (polygonPointsRef.current.length === 0) {
         setPolygonPoints([point.clone()]);
         setIsDrawing(true);
         console.log('Started polygon with first point');
       } else {
-        const newPoints = [...polygonPoints, point.clone()];
+        const newPoints = [...polygonPointsRef.current, point.clone()];
         setPolygonPoints(newPoints);
         
-        const firstPoint = polygonPoints[0];
+        const firstPoint = polygonPointsRef.current[0];
         const distance = point.distanceTo(firstPoint);
         console.log('Distance to first point:', distance);
-        if (distance < 1 && polygonPoints.length >= 3) {
+        if (distance < 1.5 && polygonPointsRef.current.length >= 3) {
+          console.log('Closing polygon with', newPoints.length, 'points');
           finishPolygonSketch(newPoints);
+        } else {
+          console.log('Added point', newPoints.length, 'to polygon');
         }
       }
       return;
     }
 
     const sketch = {
-      type: sketchTool,
+      type: sketchToolRef.current,
       startPoint: point.clone(),
       currentPoint: point.clone(),
       id: Date.now()
     };
     setCurrentSketch(sketch);
     setIsDrawing(true);
-    console.log('Started sketch:', sketchTool, 'at point:', point);
+    console.log('Started sketch:', sketchToolRef.current, 'at point:', point);
   };
 
   const continueSketch = (point) => {
-    if (!currentSketch) return;
+    if (!currentSketchRef.current) return;
     
-    if (sketchTool === 'rectangle') {
-      const sketch = { ...currentSketch, endPoint: point.clone() };
+    if (sketchToolRef.current === 'rectangle') {
+      const sketch = { ...currentSketchRef.current, endPoint: point.clone() };
       setCurrentSketch(sketch);
       finishSketch(sketch);
-    } else if (sketchTool === 'circle') {
-      const radius = point.distanceTo(currentSketch.startPoint);
-      const sketch = { ...currentSketch, radius, endPoint: point.clone() };
+    } else if (sketchToolRef.current === 'circle') {
+      const radius = point.distanceTo(currentSketchRef.current.startPoint);
+      const sketch = { ...currentSketchRef.current, radius, endPoint: point.clone() };
+      setCurrentSketch(sketch);
+      finishSketch(sketch);
+    }
+  };
+
+  const finishSketchWithPoint = (point) => {
+    if (!currentSketchRef.current) return;
+    
+    if (sketchToolRef.current === 'rectangle') {
+      const sketch = { ...currentSketchRef.current, endPoint: point.clone() };
+      setCurrentSketch(sketch);
+      finishSketch(sketch);
+    } else if (sketchToolRef.current === 'circle') {
+      const radius = point.distanceTo(currentSketchRef.current.startPoint);
+      const sketch = { ...currentSketchRef.current, radius, endPoint: point.clone() };
       setCurrentSketch(sketch);
       finishSketch(sketch);
     }
@@ -453,27 +554,26 @@ const ThreeScene = () => {
   };
 
   const updateSketchPreview = (point) => {
-    if (sketchTool === 'polygon') {
+    if (sketchToolRef.current === 'polygon') {
       updatePolygonPreview(point);
       return;
     }
     
-    if (!currentSketch) return;
+    if (!currentSketchRef.current) return;
     
-    const updatedSketch = { ...currentSketch, currentPoint: point.clone() };
+    const updatedSketch = { ...currentSketchRef.current, currentPoint: point.clone() };
     setCurrentSketch(updatedSketch);
     
     updateSketchPreviewMesh(updatedSketch);
   };
 
   const updatePolygonPreview = (point) => {
-    const existingPreview = sceneRef.current.getObjectByName('sketchPreview');
-    if (existingPreview) {
-      sceneRef.current.remove(existingPreview);
-    }
+    // Remove all existing preview objects
+    const existingPreviews = sceneRef.current.children.filter(child => child.name === 'sketchPreview');
+    existingPreviews.forEach(preview => sceneRef.current.remove(preview));
 
-    if (polygonPoints.length > 0) {
-      const points = [...polygonPoints, point];
+    if (polygonPointsRef.current.length > 0) {
+      const points = [...polygonPointsRef.current, point];
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map(p => new THREE.Vector3(p.x, 0.01, p.z))
       );
@@ -486,6 +586,18 @@ const ThreeScene = () => {
       preview.name = 'sketchPreview';
       sceneRef.current.add(preview);
       console.log('Added polygon preview with', points.length, 'points');
+      
+      // Add point markers
+      points.forEach((p, index) => {
+        const markerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const markerMaterial = new THREE.MeshBasicMaterial({ 
+          color: index === points.length - 1 ? 0x00ff00 : (index === 0 ? 0xffff00 : 0xff0000)
+        });
+        const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+        marker.position.set(p.x, 0.02, p.z);
+        marker.name = 'sketchPreview';
+        sceneRef.current.add(marker);
+      });
     }
   };
 
@@ -542,49 +654,86 @@ const ThreeScene = () => {
     }
   };
 
+  const createPolygonShape = (points) => {
+    console.log('Creating polygon shape from points:', points);
+    
+    // Validate polygon
+    if (points.length < 3) {
+      console.error('Polygon must have at least 3 points');
+      return null;
+    }
+    
+    // Check for duplicate points
+    const uniquePoints = [];
+    for (let i = 0; i < points.length; i++) {
+      const current = points[i];
+      const next = points[(i + 1) % points.length];
+      if (current.distanceTo(next) > 0.1) { // Minimum distance between points
+        uniquePoints.push(current);
+      }
+    }
+    
+    if (uniquePoints.length < 3) {
+      console.error('Polygon has too many duplicate points');
+      return null;
+    }
+    
+    const shape = new THREE.Shape();
+    const centerX = uniquePoints.reduce((sum, p) => sum + p.x, 0) / uniquePoints.length;
+    const centerZ = uniquePoints.reduce((sum, p) => sum + p.z, 0) / uniquePoints.length;
+    
+    // Create shape with proper winding order
+    shape.moveTo(uniquePoints[0].x - centerX, uniquePoints[0].z - centerZ);
+    for (let i = 1; i < uniquePoints.length; i++) {
+      shape.lineTo(uniquePoints[i].x - centerX, uniquePoints[i].z - centerZ);
+    }
+    shape.lineTo(uniquePoints[0].x - centerX, uniquePoints[0].z - centerZ);
+    
+    console.log('Created polygon shape with', uniquePoints.length, 'unique points');
+    return shape;
+  };
+
   const extrudeSketch = (sketch, height = 2) => {
+    console.log('Extruding sketch:', sketch.type, 'with height:', height);
     saveToHistory();
     
     let shape;
     
-    if (sketch.type === 'rectangle') {
-      const width = Math.abs(sketch.endPoint.x - sketch.startPoint.x);
-      const depth = Math.abs(sketch.endPoint.z - sketch.startPoint.z);
-      const centerX = (sketch.startPoint.x + sketch.endPoint.x) / 2;
-      const centerZ = (sketch.startPoint.z + sketch.endPoint.z) / 2;
+    try {
+      if (sketch.type === 'rectangle') {
+        const width = Math.abs(sketch.endPoint.x - sketch.startPoint.x);
+        const depth = Math.abs(sketch.endPoint.z - sketch.startPoint.z);
+        const centerX = (sketch.startPoint.x + sketch.endPoint.x) / 2;
+        const centerZ = (sketch.startPoint.z + sketch.endPoint.z) / 2;
 
-      shape = new THREE.Shape();
-      shape.moveTo(-width/2, -depth/2);
-      shape.lineTo(width/2, -depth/2);
-      shape.lineTo(width/2, depth/2);
-      shape.lineTo(-width/2, depth/2);
-      shape.lineTo(-width/2, -depth/2);
-    } else if (sketch.type === 'circle') {
-      const radius = sketch.radius;
-      shape = new THREE.Shape();
-      shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
-    } else if (sketch.type === 'polygon') {
-      shape = new THREE.Shape();
-      const points = sketch.points;
-      
-      const centerX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
-      const centerZ = points.reduce((sum, p) => sum + p.z, 0) / points.length;
-      
-      shape.moveTo(points[0].x - centerX, points[0].z - centerZ);
-      for (let i = 1; i < points.length; i++) {
-        shape.lineTo(points[i].x - centerX, points[i].z - centerZ);
+        shape = new THREE.Shape();
+        shape.moveTo(-width/2, -depth/2);
+        shape.lineTo(width/2, -depth/2);
+        shape.lineTo(width/2, depth/2);
+        shape.lineTo(-width/2, depth/2);
+        shape.lineTo(-width/2, -depth/2);
+      } else if (sketch.type === 'circle') {
+        const radius = sketch.radius;
+        shape = new THREE.Shape();
+        shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+      } else if (sketch.type === 'polygon') {
+        console.log('Creating polygon shape with', sketch.points.length, 'points');
+        shape = createPolygonShape(sketch.points);
+        if (!shape) {
+          console.error('Failed to create polygon shape');
+          return;
+        }
       }
-      shape.lineTo(points[0].x - centerX, points[0].z - centerZ);
-    }
 
-    const extrudeSettings = {
-      depth: height,
-      bevelEnabled: false
-    };
+      const extrudeSettings = {
+        depth: height,
+        bevelEnabled: false
+      };
 
-    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    const material = new THREE.MeshLambertMaterial({ color: 0xff6600 });
-    const mesh = new THREE.Mesh(geometry, material);
+      console.log('Creating extrude geometry...');
+      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      const material = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+      const mesh = new THREE.Mesh(geometry, material);
     
     if (sketch.type === 'rectangle') {
       const centerX = (sketch.startPoint.x + sketch.endPoint.x) / 2;
@@ -604,8 +753,14 @@ const ThreeScene = () => {
     mesh.userData.type = 'extruded';
     mesh.userData.id = Date.now() + Math.random();
 
-    sceneRef.current.add(mesh);
-    setObjects(prev => [...prev, mesh]);
+      sceneRef.current.add(mesh);
+      setObjects(prev => [...prev, mesh]);
+      console.log('Successfully extruded', sketch.type, 'sketch');
+      
+    } catch (error) {
+      console.error('Error extruding sketch:', error);
+      alert(`Failed to extrude ${sketch.type} sketch. Please check the shape and try again.`);
+    }
   };
 
   const transformObject = (property, value) => {
@@ -803,13 +958,53 @@ const ThreeScene = () => {
         {sketchShapes.length > 0 && (
           <div className="extrusion-controls">
             <h4>Extrude Sketches ({sketchShapes.length})</h4>
+            <div className="extrusion-height-control">
+              <label>Extrusion Height: 
+                <input 
+                  type="range" 
+                  min="0.1" 
+                  max="20" 
+                  step="0.1"
+                  value={extrusionHeight}
+                  onChange={(e) => setExtrusionHeight(parseFloat(e.target.value))}
+                />
+                <input 
+                  type="number" 
+                  step="0.1"
+                  value={extrusionHeight.toFixed(2)}
+                  onChange={(e) => setExtrusionHeight(parseFloat(e.target.value))}
+                  style={{width: '60px', marginLeft: '5px'}}
+                />
+              </label>
+            </div>
             <div className="extrusion-info">
               <small>Click "Extrude" to convert sketches to 3D objects</small>
             </div>
             {sketchShapes.map((sketch, index) => (
               <div key={sketch.id} className="sketch-item">
-                <span>Sketch {index + 1} ({sketch.type})</span>
-                <button onClick={() => extrudeSketch(sketch)}>Extrude</button>
+                <div className="sketch-info">
+                  <span>Sketch {index + 1} ({sketch.type})</span>
+                  <div className="sketch-dimensions">
+                    {sketch.type === 'rectangle' && (
+                      <div>
+                        <small>Width: {Math.abs(sketch.endPoint.x - sketch.startPoint.x).toFixed(2)}</small>
+                        <small>Depth: {Math.abs(sketch.endPoint.z - sketch.startPoint.z).toFixed(2)}</small>
+                      </div>
+                    )}
+                    {sketch.type === 'circle' && (
+                      <div>
+                        <small>Radius: {sketch.radius.toFixed(2)}</small>
+                        <small>Diameter: {(sketch.radius * 2).toFixed(2)}</small>
+                      </div>
+                    )}
+                    {sketch.type === 'polygon' && (
+                      <div>
+                        <small>Points: {sketch.points.length}</small>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => extrudeSketch(sketch, extrusionHeight)}>Extrude</button>
               </div>
             ))}
           </div>
@@ -1018,7 +1213,7 @@ const ThreeScene = () => {
       </div>
 
       <div 
-        className="scene-viewport" 
+        className={`scene-viewport ${isSketchMode ? 'sketch-mode' : ''}`}
         ref={mountRef}
         style={{
           width: '100%',
