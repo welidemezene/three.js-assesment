@@ -804,10 +804,17 @@ const ThreeScene = () => {
         bevelEnabled: false
       };
 
-      console.log('Creating extrude geometry...');
+      console.log('Creating extrude geometry with height:', height);
       const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       const material = new THREE.MeshLambertMaterial({ color: 0xff6600 });
       const mesh = new THREE.Mesh(geometry, material);
+      
+      // Ensure the mesh is properly sized
+      geometry.computeBoundingBox();
+      const boundingBox = geometry.boundingBox;
+      const size = boundingBox.getSize(new THREE.Vector3());
+      console.log('Extruded mesh size:', size);
+      console.log('Extruded mesh height:', size.y);
     
     if (sketch.type === 'rectangle') {
       const centerX = (sketch.startPoint.x + sketch.endPoint.x) / 2;
@@ -945,6 +952,210 @@ const ThreeScene = () => {
       }
     };
     reader.readAsText(file);
+  };
+
+  // Enhanced import/export functions for multiple formats
+  const importGLB = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const arrayBuffer = e.target.result;
+        
+        // Import GLTFLoader from three.js
+        import('three/examples/jsm/loaders/GLTFLoader').then(({ GLTFLoader }) => {
+          const loader = new GLTFLoader();
+          loader.parse(arrayBuffer, '', (gltf) => {
+            console.log('GLB loaded:', gltf);
+            
+            // Add all meshes from the GLB to the scene
+            gltf.scene.traverse((child) => {
+              if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                child.userData.isSelectable = true;
+                child.userData.type = 'imported';
+                child.userData.id = Date.now() + Math.random();
+                
+                sceneRef.current.add(child);
+                setObjects(prev => [...prev, child]);
+              }
+            });
+          }, (error) => {
+            console.error('Error loading GLB:', error);
+            alert('Failed to load GLB file. Please check the file format.');
+          });
+        });
+      } catch (error) {
+        console.error('Error importing GLB:', error);
+        alert('Failed to import GLB file.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const importSTL = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const arrayBuffer = e.target.result;
+        
+        // Import STLLoader from three.js
+        import('three/examples/jsm/loaders/STLLoader').then(({ STLLoader }) => {
+          const loader = new STLLoader();
+          const geometry = loader.parse(arrayBuffer);
+          
+          const material = new THREE.MeshLambertMaterial({ 
+            color: 0x00ff00,
+            side: THREE.DoubleSide 
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.userData.isSelectable = true;
+          mesh.userData.type = 'stl';
+          mesh.userData.id = Date.now() + Math.random();
+          
+          // Center the mesh
+          geometry.computeBoundingBox();
+          const center = geometry.boundingBox.getCenter(new THREE.Vector3());
+          mesh.position.sub(center);
+          
+          sceneRef.current.add(mesh);
+          setObjects(prev => [...prev, mesh]);
+          
+          console.log('STL loaded:', mesh);
+        });
+      } catch (error) {
+        console.error('Error importing STL:', error);
+        alert('Failed to import STL file.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const exportGLB = () => {
+    if (objects.length === 0) {
+      alert('No objects to export. Please create some objects first.');
+      return;
+    }
+
+    try {
+      // Import GLTFExporter from three.js
+      import('three/examples/jsm/exporters/GLTFExporter').then(({ GLTFExporter }) => {
+        const exporter = new GLTFExporter();
+        
+        // Create a temporary scene with all objects
+        const tempScene = new THREE.Scene();
+        objects.forEach(obj => {
+          const clonedObj = obj.clone();
+          tempScene.add(clonedObj);
+        });
+        
+        exporter.parse(tempScene, (gltf) => {
+          const output = JSON.stringify(gltf, null, 2);
+          const blob = new Blob([output], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'scene.glb';
+          link.click();
+          URL.revokeObjectURL(url);
+          console.log('GLB exported successfully');
+        }, { binary: true });
+      }).catch(error => {
+        console.error('Error loading GLTFExporter:', error);
+        alert('Failed to load GLTF exporter. Please try again.');
+      });
+    } catch (error) {
+      console.error('Error exporting GLB:', error);
+      alert('Failed to export GLB file.');
+    }
+  };
+
+  const exportSTL = () => {
+    if (objects.length === 0) {
+      alert('No objects to export. Please create some objects first.');
+      return;
+    }
+
+    try {
+      // Import STLExporter from three.js
+      import('three/examples/jsm/exporters/STLExporter').then(({ STLExporter }) => {
+        const exporter = new STLExporter();
+        
+        // Create a temporary scene with all objects
+        const tempScene = new THREE.Scene();
+        objects.forEach(obj => {
+          const clonedObj = obj.clone();
+          tempScene.add(clonedObj);
+        });
+        
+        const stlString = exporter.parse(tempScene);
+        const blob = new Blob([stlString], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'scene.stl';
+        link.click();
+        URL.revokeObjectURL(url);
+        console.log('STL exported successfully');
+      }).catch(error => {
+        console.error('Error loading STLExporter:', error);
+        alert('Failed to load STL exporter. Please try again.');
+      });
+    } catch (error) {
+      console.error('Error exporting STL:', error);
+      alert('Failed to export STL file.');
+    }
+  };
+
+  const importBREP = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const arrayBuffer = e.target.result;
+        
+        // Note: BREP support requires OpenCascade.js which is complex
+        // For now, we'll show a placeholder message
+        alert('BREP import is not yet implemented. This feature requires OpenCascade.js integration.');
+        console.log('BREP file received:', file.name, arrayBuffer.byteLength, 'bytes');
+        
+        // TODO: Implement BREP parsing with OpenCascade.js
+        // This would involve:
+        // 1. Loading OpenCascade.js
+        // 2. Parsing BREP data
+        // 3. Converting to Three.js geometry
+        // 4. Adding to scene
+        
+      } catch (error) {
+        console.error('Error importing BREP:', error);
+        alert('Failed to import BREP file.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const exportBREP = () => {
+    // Note: BREP export is complex and requires OpenCascade.js
+    alert('BREP export is not yet implemented. This feature requires OpenCascade.js integration.');
+    console.log('BREP export requested for objects:', objects.length);
+    
+    // TODO: Implement BREP export with OpenCascade.js
+    // This would involve:
+    // 1. Loading OpenCascade.js
+    // 2. Converting Three.js geometry to BREP format
+    // 3. Generating BREP file
+    // 4. Downloading the file
   };
 
   const toggleGrid = () => {
@@ -1110,10 +1321,21 @@ const ThreeScene = () => {
                   onChange={(e) => setExtrusionHeight(parseFloat(e.target.value))}
                   style={{width: '60px', marginLeft: '5px'}}
                 />
+                <span style={{marginLeft: '5px', color: '#3498db', fontSize: '12px'}}>
+                  {extrusionHeight.toFixed(2)} units
+                </span>
               </label>
             </div>
             <div className="extrusion-info">
               <small>Click "Extrude" to convert sketches to 3D objects</small>
+              <div style={{marginTop: '5px', padding: '5px', background: '#34495e', borderRadius: '3px'}}>
+                <small style={{color: '#f39c12'}}>
+                  💡 Tip: Higher values create taller 3D objects
+                </small>
+                <div style={{marginTop: '3px', fontSize: '10px', color: '#95a5a6'}}>
+                  Current height: {extrusionHeight.toFixed(2)} units
+                </div>
+              </div>
             </div>
             {sketchShapes.map((sketch, index) => (
               <div key={sketch.id} className="sketch-item">
@@ -1332,15 +1554,68 @@ const ThreeScene = () => {
 
         <div className="scene-controls">
           <h4>Scene</h4>
-          <button onClick={exportScene}>Export Scene</button>
-          <input 
-            type="file" 
-            accept=".json" 
-            onChange={importScene}
-            style={{ display: 'none' }}
-            id="import-file"
-          />
-          <label htmlFor="import-file" className="import-button">Import Scene</label>
+          
+          {/* Export Options */}
+          <div className="export-controls">
+            <h5>Export</h5>
+            <button onClick={exportScene}>Export JSON</button>
+            <button onClick={exportGLB}>Export GLB</button>
+            <button onClick={exportSTL}>Export STL</button>
+            <button onClick={exportBREP}>Export BREP</button>
+          </div>
+          
+          {/* Import Options */}
+          <div className="import-controls">
+            <h5>Import</h5>
+            
+            {/* JSON Import */}
+            <div className="import-option">
+              <input 
+                type="file" 
+                accept=".json" 
+                onChange={importScene}
+                style={{ display: 'none' }}
+                id="import-json"
+              />
+              <label htmlFor="import-json" className="import-button">Import JSON</label>
+            </div>
+            
+            {/* GLB Import */}
+            <div className="import-option">
+              <input 
+                type="file" 
+                accept=".glb,.gltf" 
+                onChange={importGLB}
+                style={{ display: 'none' }}
+                id="import-glb"
+              />
+              <label htmlFor="import-glb" className="import-button">Import GLB/GLTF</label>
+            </div>
+            
+            {/* STL Import */}
+            <div className="import-option">
+              <input 
+                type="file" 
+                accept=".stl" 
+                onChange={importSTL}
+                style={{ display: 'none' }}
+                id="import-stl"
+              />
+              <label htmlFor="import-stl" className="import-button">Import STL</label>
+            </div>
+            
+            {/* BREP Import */}
+            <div className="import-option">
+              <input 
+                type="file" 
+                accept=".brep" 
+                onChange={importBREP}
+                style={{ display: 'none' }}
+                id="import-brep"
+              />
+              <label htmlFor="import-brep" className="import-button">Import BREP</label>
+            </div>
+          </div>
         </div>
 
         {selectedObject && (
