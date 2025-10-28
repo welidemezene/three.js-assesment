@@ -119,12 +119,14 @@ A comprehensive 3D editor built with React and Three.js, featuring basic 3D obje
    - Drag-and-drop object manipulation
    - Context menus and keyboard shortcuts
    - Multiple viewport support
+   - 
 
 4. **CAD-Specific Features**:
    - Constraint system
    - Parametric modeling
    - Assembly management
    - Technical drawing generation
+   - 
 
 5. **Performance Enhancements**:
    - Level-of-detail (LOD) system
